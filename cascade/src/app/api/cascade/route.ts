@@ -2,6 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { buildSystemPrompt, buildUserPrompt } from "@/lib/prompt";
 import { DivergenceLevel } from "@/lib/types";
+import { CASCADE_ERROR_CODES, CASCADE_ERROR_MESSAGES } from "@/lib/errors";
+import { moderatePremise } from "@/lib/moderation.server";
+import { checkSuitability } from "@/lib/suitability.server";
 
 const VALID_LEVELS: DivergenceLevel[] = [
   "grounded",
@@ -21,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   if (!premise || typeof premise !== "string" || premise.trim().length === 0) {
     return NextResponse.json(
-      { error: "premise is required" },
+      { error: CASCADE_ERROR_MESSAGES[CASCADE_ERROR_CODES.EMPTY_PREMISE], code: CASCADE_ERROR_CODES.EMPTY_PREMISE },
       { status: 400 }
     );
   }
@@ -29,9 +32,45 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY is not set on the server" },
+      { error: CASCADE_ERROR_MESSAGES[CASCADE_ERROR_CODES.CONFIG_ERROR], code: CASCADE_ERROR_CODES.CONFIG_ERROR },
       { status: 500 }
     );
+  }
+
+  // Safeguarding: keep this engine limited to genuine, on-topic, safe "what if"
+  // premises before spending a full generation call on it.
+  try {
+    const moderation = await moderatePremise(premise, apiKey);
+    if (!moderation.allowed) {
+      const code = moderation.code ?? CASCADE_ERROR_CODES.INVALID_PREMISE;
+      return NextResponse.json(
+        { error: CASCADE_ERROR_MESSAGES[code], code },
+        { status: 422 }
+      );
+    }
+  } catch (err) {
+    console.error("Moderation check failed:", err);
+    // Fail open: a broken moderation call shouldn't block legitimate users.
+  }
+
+  // Scope check: a separate call applying an explicit, objective framework to
+  // decide whether the premise is a historical/scientific/technological
+  // counterfactual (in scope) versus a personal/identity premise or anything
+  // else (out of scope). Kept distinct from the safety/coherence check above.
+  try {
+    const inScope = await checkSuitability(premise, apiKey);
+    if (!inScope) {
+      return NextResponse.json(
+        {
+          error: CASCADE_ERROR_MESSAGES[CASCADE_ERROR_CODES.OUT_OF_SCOPE],
+          code: CASCADE_ERROR_CODES.OUT_OF_SCOPE,
+        },
+        { status: 422 }
+      );
+    }
+  } catch (err) {
+    console.error("Suitability check failed:", err);
+    // Fail open: a broken scope check shouldn't block legitimate users.
   }
 
   const anthropic = new Anthropic({ apiKey, fetch: globalThis.fetch });
@@ -57,7 +96,10 @@ export async function POST(req: NextRequest) {
       tree = JSON.parse(cleanedText);
     } catch {
       return NextResponse.json(
-        { error: "Model did not return valid JSON", raw: rawText },
+        {
+          error: CASCADE_ERROR_MESSAGES[CASCADE_ERROR_CODES.MODEL_OUTPUT_INVALID],
+          code: CASCADE_ERROR_CODES.MODEL_OUTPUT_INVALID,
+        },
         { status: 502 }
       );
     }
@@ -66,7 +108,10 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("Cascade API error:", err);
     return NextResponse.json(
-      { error: "Failed to generate cascade" },
+      {
+        error: CASCADE_ERROR_MESSAGES[CASCADE_ERROR_CODES.GENERATION_FAILED],
+        code: CASCADE_ERROR_CODES.GENERATION_FAILED,
+      },
       { status: 500 }
     );
   }

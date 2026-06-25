@@ -62,6 +62,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["Hanken Grotesk", "sans-serif"],
+        serif: ["Playfair Display", "serif"],
       },
       borderRadius: {
         sm: "0.25rem",

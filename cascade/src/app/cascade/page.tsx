@@ -1,19 +1,54 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import LoadingScreen from "@/components/LoadingScreen";
-import NodeCard from "@/components/NodeCard";
-import Breadcrumb, { BreadcrumbEntry } from "@/components/Breadcrumb";
+import { useRouter, useSearchParams } from "next/navigation";
+import AuthScreen from "@/components/AuthScreen";
+import LoadingScreen, { LoadingPhase } from "@/components/LoadingScreen";
+import StoryView from "@/components/StoryView";
 import ZoomOutMap from "@/components/ZoomOutMap";
 import { CascadeNode, CascadeTree, DivergenceLevel } from "@/lib/types";
+import { flattenTopTwoLevels } from "@/lib/treeUtils";
+import { clearNodeImageCache, seedNodeImageCache } from "@/lib/nodeImage";
+import { auth } from "@/lib/firebase";
+import { getCascadeById, saveCascade } from "@/lib/cascades";
 
-const LEVELS: DivergenceLevel[] = ["grounded", "plausible", "speculative", "wild"];
+// How long the cinematic loading beat plays before the auth gate appears.
+// Generation keeps running underneath it the whole time.
+const AUTH_GATE_DELAY_MS = 4500;
 
-type Stage = "input" | "loading" | "experience";
+// The landing page is a separate static site/origin in dev; this points back
+// at it so generation errors can surface where the premise was typed.
+const LANDING_URL = process.env.NEXT_PUBLIC_LANDING_URL || "/";
 
-function truncate(text: string, max = 48): string {
-  return text.length > max ? text.slice(0, max - 1) + "…" : text;
+function redirectHomeWithError(code?: string) {
+  const url = new URL(LANDING_URL, window.location.origin);
+  if (code) url.searchParams.set("error", code);
+  window.location.href = url.toString();
+}
+
+type Stage = "input" | "loading" | "auth" | "experience";
+
+function resolvePath(tree: CascadeTree, indices: number[]) {
+  const chain: CascadeNode[] = [];
+  let siblings: CascadeNode[] = tree.branches;
+
+  for (let depth = 0; depth < indices.length; depth++) {
+    const node = siblings[indices[depth]];
+    chain.push(node);
+    if (depth < indices.length - 1) {
+      siblings = node.children;
+    }
+  }
+
+  const lastSiblings = indices.length === 1 ? tree.branches : chain[chain.length - 2].children;
+
+  return {
+    chain,
+    node: chain[chain.length - 1],
+    siblings: lastSiblings,
+    index: indices[indices.length - 1],
+    depth: indices.length - 1,
+  };
 }
 
 export default function CascadePage() {
@@ -25,22 +60,87 @@ export default function CascadePage() {
 }
 
 function CascadePageInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [stage, setStage] = useState<Stage>("input");
   const [premise, setPremise] = useState("");
   const [level, setLevel] = useState<DivergenceLevel>("plausible");
   const [tree, setTree] = useState<CascadeTree | null>(null);
-  const [path, setPath] = useState<CascadeNode[]>([]);
-  const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
+  const [indices, setIndices] = useState<number[]>([0]);
+  const [visitedIds, setVisitedIds] = useState<Set<string>>(new Set());
   const [showMap, setShowMap] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>("tree");
   const autostarted = useRef(false);
+  // Generation runs in the background while the auth gate is showing, so we
+  // track readiness/progress outside of React state to avoid racing the UI.
+  const treeReadyRef = useRef(false);
+  const pastAuthRef = useRef(false);
+  // A freshly generated tree gets saved to the signed-in user's library once;
+  // a tree opened from that library (?load=) is already saved.
+  const shouldSaveRef = useRef(false);
+  const savedRef = useRef(false);
+
+  function handleAuthContinue() {
+    if (treeReadyRef.current) {
+      setStage("experience");
+    } else {
+      pastAuthRef.current = true;
+      setStage("loading");
+    }
+  }
+
+  async function loadSaved(id: string) {
+    setStage("loading");
+    setLoadingPhase("tree");
+    clearNodeImageCache();
+    shouldSaveRef.current = false;
+
+    try {
+      const saved = await getCascadeById(id);
+      if (!saved) {
+        router.replace("/");
+        return;
+      }
+
+      setPremise(saved.tree.premise);
+      setLevel(saved.tree.divergence_level);
+      setLoadingPhase("images");
+      try {
+        const items = flattenTopTwoLevels(saved.tree).map((n) => ({ id: n.id, text: n.text, lens: n.lens }));
+        const imgRes = await fetch("/api/generate-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items }),
+        });
+        if (imgRes.ok) {
+          const imgData = await imgRes.json();
+          seedNodeImageCache(imgData.images ?? {});
+        }
+      } catch {
+        // Non-fatal: experience still works with placeholder art.
+      }
+
+      setTree(saved.tree);
+      setIndices([0]);
+      setVisitedIds(new Set());
+      setStage("experience");
+    } catch {
+      router.replace("/");
+    }
+  }
 
   async function generate(premiseToUse: string, levelToUse: DivergenceLevel) {
     if (!premiseToUse.trim() || stage === "loading") return;
 
     setStage("loading");
-    setError(null);
+    setLoadingPhase("tree");
+    clearNodeImageCache();
+    treeReadyRef.current = false;
+    pastAuthRef.current = false;
+    shouldSaveRef.current = true;
+    savedRef.current = false;
+
+    const authGateTimer = setTimeout(() => setStage("auth"), AUTH_GATE_DELAY_MS);
 
     try {
       const res = await fetch("/api/cascade", {
@@ -50,28 +150,70 @@ function CascadePageInner() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Request failed");
+      if (!res.ok) {
+        clearTimeout(authGateTimer);
+        redirectHomeWithError(data.code);
+        return;
+      }
 
-      setTree(data as CascadeTree);
-      setRevealedIds(new Set());
-      setPath([]);
-      setStage("experience");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-      setStage("input");
+      const newTree = data as CascadeTree;
+
+      // Preload every node's image before letting the user in, so navigation
+      // never shows a pop-in from placeholder to real art. Best-effort: any
+      // failure here just leaves those nodes on the placeholder gradient.
+      setLoadingPhase("images");
+      try {
+        const items = flattenTopTwoLevels(newTree).map((n) => ({ id: n.id, text: n.text, lens: n.lens }));
+        const imgRes = await fetch("/api/generate-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items }),
+        });
+        if (imgRes.ok) {
+          const imgData = await imgRes.json();
+          seedNodeImageCache(imgData.images ?? {});
+        }
+      } catch {
+        // Non-fatal: experience still works with placeholder art.
+      }
+
+      setTree(newTree);
+      setIndices([0]);
+      setVisitedIds(new Set());
+      treeReadyRef.current = true;
+
+      // If the user already clicked through the auth gate while this was
+      // still running, let them straight into the experience now.
+      if (pastAuthRef.current) {
+        setStage("experience");
+      }
+    } catch {
+      // No retry UI here anymore since the prompt screen is gone; send the
+      // user back to the landing page to try again.
+      clearTimeout(authGateTimer);
+      redirectHomeWithError();
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    generate(premise, level);
-  }
-
-  // Entry from the landing page hero search bar / trending chips: ?premise=...&autostart=1
+  // Entry points: the landing page hero search bar / trending chips
+  // (?premise=...&autostart=1), or opening a saved cascade from the library
+  // (?load=<id>). Anyone landing here with neither gets sent back home
+  // instead of seeing a second "enter your prompt" screen.
   useEffect(() => {
     if (autostarted.current) return;
+
+    const loadId = searchParams.get("load");
+    if (loadId) {
+      autostarted.current = true;
+      loadSaved(loadId);
+      return;
+    }
+
     const premiseParam = searchParams.get("premise");
-    if (!premiseParam) return;
+    if (!premiseParam) {
+      router.replace("/");
+      return;
+    }
 
     autostarted.current = true;
     setPremise(premiseParam);
@@ -82,148 +224,161 @@ function CascadePageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  const currentLevelNodes = useMemo(() => {
-    if (!tree) return [];
-    return path.length === 0 ? tree.branches : path[path.length - 1].children;
-  }, [tree, path]);
+  // Save a freshly generated cascade to the signed-in user's library exactly
+  // once, after they've actually made it into the experience.
+  useEffect(() => {
+    if (stage !== "experience" || !tree || !shouldSaveRef.current || savedRef.current) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
 
-  function enterNode(node: CascadeNode) {
-    if (node.children.length === 0) return;
-    setPath((p) => [...p, node]);
+    savedRef.current = true;
+    saveCascade(uid, tree).catch(() => {
+      // Best-effort: failing to save shouldn't interrupt the experience.
+      savedRef.current = false;
+    });
+  }, [stage, tree]);
+
+  const resolved = useMemo(() => {
+    if (!tree) return null;
+    return resolvePath(tree, indices);
+  }, [tree, indices]);
+
+  useEffect(() => {
+    if (!resolved) return;
+    setVisitedIds((prev) => {
+      if (prev.has(resolved.node.id)) return prev;
+      return new Set(prev).add(resolved.node.id);
+    });
+  }, [resolved]);
+
+  function goToSibling(newIndex: number) {
+    setIndices((prev) => {
+      if (newIndex < 0) return prev;
+      const next = [...prev];
+      next[next.length - 1] = newIndex;
+      return next;
+    });
   }
 
-  function handleCardClick(node: CascadeNode) {
-    if (!revealedIds.has(node.id)) {
-      setRevealedIds((prev) => new Set(prev).add(node.id));
-      return;
-    }
-    enterNode(node);
+  function descend() {
+    if (!resolved || resolved.node.children.length === 0) return;
+    setIndices((prev) => [...prev, 0]);
   }
 
   function goBack() {
-    setPath((p) => p.slice(0, -1));
+    setIndices((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
   }
 
-  function jumpTo(index: number) {
-    setPath((p) => p.slice(0, index));
+  function exitToStart() {
+    router.push("/");
   }
 
   function jumpToNodeId(id: string) {
     if (!tree) return;
-    if (id === tree.premise) {
-      setPath([]);
-      setShowMap(false);
-      return;
-    }
-    for (const branch of tree.branches) {
+
+    for (let bi = 0; bi < tree.branches.length; bi++) {
+      const branch = tree.branches[bi];
       if (branch.id === id) {
-        setPath([branch]);
+        setIndices([bi]);
         setShowMap(false);
         return;
       }
-      for (const child of branch.children) {
+      for (let ci = 0; ci < branch.children.length; ci++) {
+        const child = branch.children[ci];
         if (child.id === id) {
-          setPath([branch, child]);
+          setIndices([bi, ci]);
           setShowMap(false);
           return;
+        }
+        for (let gi = 0; gi < child.children.length; gi++) {
+          const grandchild = child.children[gi];
+          if (grandchild.id === id) {
+            setIndices([bi, ci, gi]);
+            setShowMap(false);
+            return;
+          }
         }
       }
     }
   }
 
+  // Keyboard navigation: arrows move between siblings, Enter descends, Escape backs out / closes the map.
+  useEffect(() => {
+    if (stage !== "experience" || !resolved) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (showMap) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setShowMap(false);
+        }
+        return;
+      }
+      if (!resolved) return;
+
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        if (resolved.index > 0) goToSibling(resolved.index - 1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        if (resolved.index < resolved.siblings.length - 1) goToSibling(resolved.index + 1);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        descend();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        goBack();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, resolved, showMap]);
+
   if (stage === "loading") {
-    return <LoadingScreen premise={premise} />;
+    return <LoadingScreen premise={premise} level={level} phase={loadingPhase} />;
   }
 
-  if (stage === "experience" && tree) {
-    const breadcrumbEntries: BreadcrumbEntry[] = [
-      { label: truncate(tree.premise, 32), node: null },
-      ...path.map((n) => ({ label: truncate(n.text, 32), node: n })),
-    ];
+  if (stage === "auth") {
+    return <AuthScreen onContinue={handleAuthContinue} />;
+  }
 
+  if (stage === "experience" && tree && resolved) {
     return (
-      <main className="flex min-h-screen flex-col items-center gap-8 px-6 py-12">
-        <div className="flex w-full max-w-container items-center justify-between">
-          <button
-            type="button"
-            onClick={goBack}
-            disabled={path.length === 0}
-            className="flex items-center gap-1 text-[14px] font-semibold text-on-surface disabled:opacity-30"
-          >
-            ← Back
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowMap(true)}
-            className="rounded-full border-[0.5px] border-outline-variant px-4 py-1.5 text-[12px] font-bold uppercase tracking-[0.1em] text-on-surface-variant transition-colors hover:border-secondary hover:text-secondary"
-          >
-            Zoom out
-          </button>
-        </div>
-
-        <Breadcrumb entries={breadcrumbEntries} onJump={jumpTo} />
-
-        <div className="grid w-full max-w-container grid-cols-1 gap-5 md:grid-cols-3">
-          {currentLevelNodes.map((node) => (
-            <NodeCard
-              key={node.id}
-              node={node}
-              revealed={revealedIds.has(node.id)}
-              onClick={() => handleCardClick(node)}
-            />
-          ))}
-        </div>
+      <>
+        <StoryView
+          node={resolved.node}
+          siblings={resolved.siblings}
+          index={resolved.index}
+          depth={resolved.depth}
+          premise={tree.premise}
+          level={level}
+          visitedIds={visitedIds}
+          canGoBack={indices.length > 1}
+          onPrev={() => goToSibling(resolved.index - 1)}
+          onNext={() => goToSibling(resolved.index + 1)}
+          onDescend={descend}
+          onBack={goBack}
+          onShowMap={() => setShowMap(true)}
+          onExit={exitToStart}
+        />
 
         {showMap && (
           <ZoomOutMap
             tree={tree}
-            visitedIds={revealedIds}
+            visitedIds={visitedIds}
+            currentNodeId={resolved.node.id}
             onSelect={jumpToNodeId}
             onClose={() => setShowMap(false)}
           />
         )}
-      </main>
+      </>
     );
   }
 
-  return (
-    <main className="mx-auto flex min-h-screen max-w-container flex-col items-center justify-center gap-10 px-6 text-center">
-      <h1 className="max-w-[800px] text-[36px] font-bold leading-[42px] tracking-[-0.02em] text-on-surface md:text-[48px] md:leading-[56px]">
-        What if...
-      </h1>
-
-      <form onSubmit={handleSubmit} className="flex w-full max-w-[600px] flex-col gap-4">
-        <input
-          value={premise}
-          onChange={(e) => setPremise(e.target.value)}
-          placeholder="the printing press was never invented"
-          className="rounded-lg border-[0.5px] border-outline-variant bg-surface-container-lowest px-4 py-3 text-[16px] text-on-surface outline-none focus:border-secondary"
-        />
-        <div className="flex justify-center gap-2">
-          {LEVELS.map((l) => (
-            <button
-              key={l}
-              type="button"
-              onClick={() => setLevel(l)}
-              className={`rounded-full px-4 py-1 text-[12px] font-bold uppercase tracking-[0.1em] ${
-                level === l
-                  ? "bg-primary text-on-primary"
-                  : "border-[0.5px] border-outline-variant text-on-surface-variant"
-              }`}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-        <button
-          type="submit"
-          className="rounded-lg bg-primary px-8 py-3 font-semibold text-on-primary transition-colors hover:bg-secondary"
-        >
-          Cascade
-        </button>
-      </form>
-
-      {error && <p className="text-error">{error}</p>}
-    </main>
-  );
+  // No premise yet: either redirecting home, or the autostart effect is about
+  // to fire. There is no standalone "enter your prompt" screen here anymore —
+  // the landing page hero search bar is the only entry point.
+  return null;
 }

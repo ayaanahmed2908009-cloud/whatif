@@ -1,43 +1,79 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DivergenceLevel } from "@/lib/types";
 
-const CYCLING_LINES = [
+const TREE_LINES = [
   "Tracing the first ripple...",
-  "Weighing economic consequence...",
+  "Extrapolating economic divergence...",
   "Following the social fallout...",
-  "Mapping technological drift...",
+  "Extrapolating technological divergence...",
   "Considering the human cost...",
   "Branching into the third order...",
 ];
 
-export default function LoadingScreen({ premise }: { premise: string }) {
+const IMAGE_LINES = [
+  "Rendering the first divergence...",
+  "Painting the economic thread...",
+  "Illustrating the social fallout...",
+  "Visualizing the third order...",
+];
+
+export type LoadingPhase = "tree" | "images";
+
+export default function LoadingScreen({
+  premise,
+  level,
+  phase = "tree",
+}: {
+  premise: string;
+  level: DivergenceLevel;
+  phase?: LoadingPhase;
+}) {
   const [lineIndex, setLineIndex] = useState(0);
+  const lines = phase === "images" ? IMAGE_LINES : TREE_LINES;
 
   useEffect(() => {
+    setLineIndex(0);
     const interval = setInterval(() => {
-      setLineIndex((i) => (i + 1) % CYCLING_LINES.length);
+      setLineIndex((i) => (i + 1) % lines.length);
     }, 1800);
     return () => clearInterval(interval);
-  }, []);
+  }, [lines]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-10 px-6 text-center">
-      <BranchingAnimation />
-      <div className="flex max-w-[600px] flex-col items-center gap-3">
-        <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-on-surface-variant">
-          Diverging from
-        </p>
-        <p className="text-[20px] leading-[32px] text-on-surface">
-          “{premise}”
-        </p>
-        <p
-          key={lineIndex}
-          className="mt-4 animate-[fadeIn_0.4s_ease-in-out] text-[16px] leading-[24px] text-secondary"
-        >
-          {CYCLING_LINES[lineIndex]}
-        </p>
+    <main className="relative flex min-h-screen flex-col bg-white text-black">
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-5 sm:px-8 sm:py-6 md:px-12">
+        <div className="flex items-center gap-2 text-[12px] tracking-[0.05em] sm:gap-3 sm:text-[13px]">
+          <span className="font-bold">Cascade</span>
+          <span className="hidden text-black/20 sm:inline">|</span>
+          <span className="hidden uppercase tracking-[0.15em] text-black/50 sm:inline">
+            Divergence Engine
+          </span>
+        </div>
+        <span className="whitespace-nowrap rounded-full border border-black/15 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-black/60 sm:px-4 sm:py-1.5 sm:text-[11px] sm:tracking-[0.1em]">
+          {level}-core-simulation
+        </span>
+      </header>
+
+      <div className="relative flex flex-1 items-center justify-center px-6 py-16">
+        <div className="relative z-10 flex max-w-[860px] flex-col items-center gap-8 text-center">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.25em] text-black/35">
+            {phase === "images" ? "Rendering visuals" : "Analyzing hypothesis"}
+          </p>
+          <p className="font-serif text-[40px] italic leading-[1.25] text-black sm:text-[52px] md:text-[64px]">
+            &ldquo;{premise}&rdquo;
+          </p>
+          <div className="h-px w-12 bg-black/15" />
+          <p
+            key={lineIndex}
+            className="animate-[fadeIn_0.5s_ease-in-out] font-serif text-[17px] italic text-black/40 sm:text-[19px]"
+          >
+            {lines[lineIndex]}
+          </p>
+        </div>
       </div>
+
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(4px); }
@@ -45,66 +81,5 @@ export default function LoadingScreen({ premise }: { premise: string }) {
         }
       `}</style>
     </main>
-  );
-}
-
-function BranchingAnimation() {
-  return (
-    <svg width="180" height="140" viewBox="0 0 180 140" fill="none">
-      <circle cx="90" cy="14" r="6" fill="#020220">
-        <animate attributeName="r" values="6;8;6" dur="1.6s" repeatCount="indefinite" />
-      </circle>
-      {[
-        { x2: 30, delay: "0s" },
-        { x2: 90, delay: "0.2s" },
-        { x2: 150, delay: "0.4s" },
-      ].map((branch, i) => (
-        <g key={i}>
-          <line
-            x1="90"
-            y1="14"
-            x2={branch.x2}
-            y2="70"
-            stroke="#c8c5ce"
-            strokeWidth="1.5"
-            strokeDasharray="4 4"
-          >
-            <animate
-              attributeName="stroke-dashoffset"
-              values="16;0"
-              dur="1.2s"
-              repeatCount="indefinite"
-              begin={branch.delay}
-            />
-          </line>
-          <circle cx={branch.x2} cy="70" r="5" fill="#4648D4" opacity="0.8">
-            <animate
-              attributeName="opacity"
-              values="0.3;0.9;0.3"
-              dur="1.6s"
-              repeatCount="indefinite"
-              begin={branch.delay}
-            />
-          </circle>
-          <line
-            x1={branch.x2}
-            y1="70"
-            x2={branch.x2 + (branch.x2 - 90 === 0 ? 0 : (branch.x2 - 90) / Math.abs(branch.x2 - 90)) * 18}
-            y2="126"
-            stroke="#c8c5ce"
-            strokeWidth="1.5"
-            strokeDasharray="4 4"
-          >
-            <animate
-              attributeName="stroke-dashoffset"
-              values="16;0"
-              dur="1.2s"
-              repeatCount="indefinite"
-              begin={branch.delay}
-            />
-          </line>
-        </g>
-      ))}
-    </svg>
   );
 }

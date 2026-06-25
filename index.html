@@ -105,7 +105,14 @@
         }
 
         .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            line-height: 1;
+            display: inline-block;
+            white-space: nowrap;
+            -webkit-font-smoothing: antialiased;
         }
 
         .abstract-wiggle {
@@ -151,7 +158,7 @@
 <nav class="flex justify-between items-center max-w-container-max mx-auto px-gutter py-8 w-full">
 <div class="font-headline-lg text-headline-lg tracking-tighter text-primary">Divergence</div>
 <div class="hidden md:flex items-center gap-8">
-<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#">Our Story</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="our-story.html">Our Story</a>
 <button id="get-started-btn" class="bg-primary text-on-primary px-6 py-3 rounded-xl font-bold transition-transform active:scale-95 hover:bg-secondary duration-300" type="button">Get Started</button>
 </div>
 <div class="md:hidden">
@@ -184,22 +191,24 @@
 <section class="relative z-10 max-w-container-max mx-auto px-gutter flex flex-col items-center text-center">
 <div class="max-w-[800px] space-y-8">
 <h1 class="font-display-xl text-display-xl tracking-tight text-primary">Explore the ripple effects of What If.</h1>
-<p class="font-body-lg text-body-lg text-on-surface-variant max-w-[600px] mx-auto">The world's first high-fidelity counterfactual engine for historical, scientific, and personal speculation.</p>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-[600px] mx-auto">The world's first high-fidelity counterfactual engine for historical, scientific, and technological speculation.</p>
 </div>
 
 <div class="mt-16 w-full max-w-[700px] relative group">
 <div class="absolute -inset-1 bg-gradient-to-r from-secondary-container to-secondary rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
 <form id="hero-search-form" class="relative flex items-center glass-card rounded-2xl px-6 py-5 mockup-shadow">
 <span class="material-symbols-outlined text-secondary mr-4 text-2xl">auto_fix_high</span>
-<input id="hero-search-input" class="bg-transparent border-none focus:ring-0 w-full font-body-lg text-primary placeholder:text-on-surface-variant/50" placeholder="What if the Library of Alexandria never burned?" type="text"/>
+<span class="font-body-lg text-body-lg font-bold text-primary whitespace-nowrap mr-2 select-none">What if</span>
+<input id="hero-search-input" class="bg-transparent border-none focus:ring-0 w-full font-body-lg text-primary placeholder:text-on-surface-variant/50" placeholder="the Library of Alexandria never burned?" type="text"/>
 <button id="hero-search-submit" class="bg-primary text-white p-3 rounded-xl ml-4 hover:bg-secondary transition-colors duration-300 flex items-center justify-center" type="submit">
 <span class="material-symbols-outlined">arrow_forward</span>
 </button>
 </form>
+<p id="hero-search-error" class="hidden mt-3 text-center text-body-md font-body-md text-[#ba1a1a]"></p>
 <div class="mt-4 flex justify-center gap-4">
 <span class="text-label-caps font-label-caps text-on-surface-variant/60 uppercase tracking-widest">Trending Speculations:</span>
-<span class="text-label-caps font-label-caps text-secondary cursor-pointer hover:underline trending-chip" data-prompt="What if the Cold War had ended with a Mars landing instead of a moon landing?">Cold War Mars Landing</span>
-<span class="text-label-caps font-label-caps text-secondary cursor-pointer hover:underline trending-chip" data-prompt="What if Silicon Valley had existed in 1890?">Silicon Valley in 1890</span>
+<span class="text-label-caps font-label-caps text-secondary cursor-pointer hover:underline trending-chip" data-prompt="the Cold War had ended with a Mars landing instead of a moon landing?">Cold War Mars Landing</span>
+<span class="text-label-caps font-label-caps text-secondary cursor-pointer hover:underline trending-chip" data-prompt="Silicon Valley had existed in 1890?">Silicon Valley in 1890</span>
 </div>
 </div>
 </section>
@@ -322,11 +331,11 @@
 <div class="font-headline-lg-mobile text-headline-lg-mobile text-primary mb-8 md:mb-0">Divergence</div>
 <div class="flex flex-col md:flex-row items-center gap-8">
 <div class="flex gap-8">
-<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-secondary transition-colors duration-200" href="#">Privacy Policy</a>
+<a class="font-label-caps text-label-caps text-on-surface-variant hover:text-secondary transition-colors duration-200" href="privacy-policy.html">Privacy Policy</a>
 <a class="font-label-caps text-label-caps text-on-surface-variant hover:text-secondary transition-colors duration-200" href="#">Terms of Service</a>
 <a class="font-label-caps text-label-caps text-on-surface-variant hover:text-secondary transition-colors duration-200" href="#">Contact</a>
 </div>
-<p class="font-label-caps text-label-caps text-on-surface-variant opacity-80">© 2024 Divergence AI. All rights reserved.</p>
+<p class="font-label-caps text-label-caps text-on-surface-variant opacity-80">© 2026 Divergence AI. All rights reserved.</p>
 </div>
 </div>
 </footer>
@@ -390,8 +399,9 @@
             document.querySelectorAll('.carousel-caption').forEach((caption) => {
                 function activate() {
                     if (searchInput) {
-                        searchInput.placeholder = caption.dataset.prompt;
+                        searchInput.value = caption.dataset.prompt;
                         searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        searchInput.focus();
                     }
                 }
                 caption.addEventListener('click', activate);
@@ -405,15 +415,24 @@
         })();
 
         // Cascade entry points: hero search bar, trending chips, and the plain "Get Started" path.
-        // CASCADE_BASE_URL points at the Next.js app. Update this to "" (same-origin) once
-        // the static site and the Cascade app are deployed together behind one domain.
+        // CASCADE_BASE_URL points at the Next.js app. In production this is injected by
+        // server.js from the CASCADE_BASE_URL env var; falls back to local dev default.
         (function () {
-            const CASCADE_BASE_URL = 'http://localhost:3001';
+            const CASCADE_BASE_URL = window.CASCADE_BASE_URL || 'http://localhost:3001';
 
-            function goToCascade(premise) {
+            // "What if" is a fixed, bold prefix in the UI (see hero-search-form) —
+            // the user only ever types the continuation. Guard against a pasted
+            // continuation that redundantly starts with "what if" itself.
+            function buildPremise(continuation) {
+                const trimmed = (continuation || '').trim();
+                const withoutPrefix = trimmed.replace(/^what if\s+/i, '');
+                return `What if ${withoutPrefix}`.trim();
+            }
+
+            function goToCascade(continuation) {
                 const url = new URL('/cascade', CASCADE_BASE_URL);
-                if (premise && premise.trim()) {
-                    url.searchParams.set('premise', premise.trim());
+                if (continuation && continuation.trim()) {
+                    url.searchParams.set('premise', buildPremise(continuation));
                     url.searchParams.set('autostart', '1');
                 }
                 window.location.href = url.toString();
@@ -433,8 +452,41 @@
             });
 
             const getStartedBtn = document.getElementById('get-started-btn');
-            if (getStartedBtn) {
-                getStartedBtn.addEventListener('click', () => goToCascade());
+            if (getStartedBtn && heroInput) {
+                getStartedBtn.addEventListener('click', () => {
+                    heroInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    heroInput.focus();
+                });
+            }
+
+            // Surface safeguarding errors from the cascade engine (off-topic,
+            // unsafe, too bizarre, etc.) back where the premise was typed.
+            const ERROR_MESSAGES = {
+                WHATIF_001: 'Type a "what if" to get started.',
+                WHATIF_002: 'That doesn\'t read as a "what if" scenario. Try framing it as a clear hypothetical.',
+                WHATIF_003: 'That premise isn\'t something we can explore here. Try a different historical, scientific, or speculative "what if."',
+                WHATIF_004: 'Divergence is built for historical, scientific, and speculative "what if" scenarios — try one of those.',
+                WHATIF_005: 'That\'s a bit too out-there for us to build a coherent cascade from. Try grounding it in a real premise.',
+                WHATIF_006: 'Something went wrong generating that cascade. Please try again.',
+                WHATIF_007: 'Something went wrong generating that cascade. Please try again.',
+                WHATIF_008: 'Divergence focuses on historical, scientific, and technological "what if" scenarios. Personal or identity-based premises aren\'t supported — try a historical or scientific one instead.',
+                WHATIF_500: 'The engine isn\'t configured correctly. Please try again later.',
+            };
+
+            const errorCode = new URLSearchParams(window.location.search).get('error');
+            if (errorCode) {
+                const errorEl = document.getElementById('hero-search-error');
+                if (errorEl) {
+                    errorEl.textContent = ERROR_MESSAGES[errorCode] || 'Something went wrong. Please try again.';
+                    errorEl.classList.remove('hidden');
+                }
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete('error');
+                window.history.replaceState({}, '', cleanUrl.toString());
+                if (heroInput) {
+                    heroInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    heroInput.focus();
+                }
             }
         })();
     </script>

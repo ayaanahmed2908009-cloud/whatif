@@ -52,6 +52,7 @@ const config: Config = {
         surface: "#f8f9ff",
         "tertiary-container": "#1b1f21",
         "surface-container-highest": "#d3e4fe",
+        "inverse-on-surface": "#eaf1ff",
         // probability pill colors (not in original design.md, added for Cascade)
         likely: "#1e7d3c",
         "likely-bg": "#d6f5e0",
@@ -63,6 +64,20 @@ const config: Config = {
       fontFamily: {
         sans: ["Hanken Grotesk", "sans-serif"],
         serif: ["Playfair Display", "serif"],
+        "headline-lg": ["Hanken Grotesk"],
+        "headline-lg-mobile": ["Hanken Grotesk"],
+        "label-caps": ["Hanken Grotesk"],
+        "body-md": ["Hanken Grotesk"],
+        "body-lg": ["Hanken Grotesk"],
+        "display-xl": ["Hanken Grotesk"],
+      },
+      fontSize: {
+        "headline-lg": ["48px", { lineHeight: "56px", letterSpacing: "-0.02em", fontWeight: "700" }],
+        "headline-lg-mobile": ["36px", { lineHeight: "42px", letterSpacing: "-0.02em", fontWeight: "700" }],
+        "label-caps": ["12px", { lineHeight: "16px", letterSpacing: "0.1em", fontWeight: "700" }],
+        "body-md": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+        "body-lg": ["20px", { lineHeight: "32px", fontWeight: "400" }],
+        "display-xl": ["72px", { lineHeight: "80px", letterSpacing: "-0.04em", fontWeight: "800" }],
       },
       borderRadius: {
         sm: "0.25rem",
@@ -72,8 +87,16 @@ const config: Config = {
         xl: "1.5rem",
         full: "9999px",
       },
+      spacing: {
+        "section-padding-lg": "160px",
+        gutter: "32px",
+        "container-max": "1280px",
+        "margin-mobile": "24px",
+        "section-padding-sm": "80px",
+      },
       maxWidth: {
         container: "1280px",
+        "container-max": "1280px",
       },
     },
   },

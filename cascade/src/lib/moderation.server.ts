@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { CASCADE_ERROR_CODES, CascadeErrorCode } from "./errors";
 
-const MODERATION_SYSTEM_PROMPT = `You are a content gate for "Divergence", an app where users explore counterfactual "what if" history/science/personal-speculation scenarios as branching consequence trees.
+const MODERATION_SYSTEM_PROMPT = `You are a content gate for "Ripplecast", an app where users explore counterfactual "what if" history/science/personal-speculation scenarios as branching consequence trees.
 
 Classify the user's submitted premise. Respond with ONLY a single JSON object, no prose, no markdown fences:
 

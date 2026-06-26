@@ -45,14 +45,14 @@ export default function LoadingScreen({
     <main className="relative flex min-h-screen flex-col bg-white text-black">
       <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-5 sm:px-8 sm:py-6 md:px-12">
         <div className="flex items-center gap-2 text-[12px] tracking-[0.05em] sm:gap-3 sm:text-[13px]">
-          <span className="font-bold">Cascade</span>
+          <span className="font-bold">Ripplecast</span>
           <span className="hidden text-black/20 sm:inline">|</span>
           <span className="hidden uppercase tracking-[0.15em] text-black/50 sm:inline">
-            Divergence Engine
+            Cascade Engine
           </span>
         </div>
         <span className="whitespace-nowrap rounded-full border border-black/15 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-black/60 sm:px-4 sm:py-1.5 sm:text-[11px] sm:tracking-[0.1em]">
-          {level}-core-simulation
+          {level}
         </span>
       </header>
 

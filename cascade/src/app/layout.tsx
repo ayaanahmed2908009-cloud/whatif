@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Cascade | Divergence",
+  title: "Ripplecast",
   description: "Explore the ripple effects of any what-if.",
 };
 

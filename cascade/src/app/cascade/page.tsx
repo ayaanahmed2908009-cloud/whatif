@@ -16,16 +16,6 @@ import { getCascadeById, saveCascade } from "@/lib/cascades";
 // Generation keeps running underneath it the whole time.
 const AUTH_GATE_DELAY_MS = 4500;
 
-// The landing page is a separate static site/origin in dev; this points back
-// at it so generation errors can surface where the premise was typed.
-const LANDING_URL = process.env.NEXT_PUBLIC_LANDING_URL || "/";
-
-function redirectHomeWithError(code?: string) {
-  const url = new URL(LANDING_URL, window.location.origin);
-  if (code) url.searchParams.set("error", code);
-  window.location.href = url.toString();
-}
-
 type Stage = "input" | "loading" | "auth" | "experience";
 
 function resolvePath(tree: CascadeTree, indices: number[]) {
@@ -71,6 +61,11 @@ function CascadePageInner() {
   const [showMap, setShowMap] = useState(false);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>("tree");
   const autostarted = useRef(false);
+
+  function redirectHomeWithError(code?: string) {
+    router.replace(code ? `/?error=${code}` : "/");
+  }
+
   // Generation runs in the background while the auth gate is showing, so we
   // track readiness/progress outside of React state to avoid racing the UI.
   const treeReadyRef = useRef(false);

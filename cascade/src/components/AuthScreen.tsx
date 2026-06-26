@@ -102,7 +102,7 @@ export default function AuthScreen({ onContinue }: { onContinue: () => void }) {
       <main className="relative z-10 flex flex-col min-h-screen px-5 pt-12 pb-8 items-center max-w-[800px] mx-auto">
         <header className="w-full flex justify-center mb-24">
           <h1 className="font-['Playfair_Display',serif] text-[40px] leading-[1.2] tracking-tighter text-[#e0e2eb]">
-            Divergence
+            Ripplecast
           </h1>
         </header>
 
@@ -235,7 +235,7 @@ export default function AuthScreen({ onContinue }: { onContinue: () => void }) {
               TERMS
             </a>
             <a className="font-['JetBrains_Mono',monospace] text-[12px] tracking-[0.15em] font-medium text-[#bac9cc]/60 hover:text-[#e0e2eb] transition-colors" href="#" onClick={(e) => e.preventDefault()}>
-              DIVERGENCE v2.4.0
+              RIPPLECAST · BETA
             </a>
           </div>
         </footer>

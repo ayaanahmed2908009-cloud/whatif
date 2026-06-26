@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const SUITABILITY_SYSTEM_PROMPT = `You are a scope gate for "Divergence", an engine that builds branching consequence trees for counterfactual "what if" premises. Your only job is to decide whether a submitted premise is IN SCOPE.
+const SUITABILITY_SYSTEM_PROMPT = `You are a scope gate for "Ripplecast", an engine that builds branching consequence trees for counterfactual "what if" premises. Your only job is to decide whether a submitted premise is IN SCOPE.
 
 Apply this objective framework, in order, and stop at the first rule that resolves the decision:
 
